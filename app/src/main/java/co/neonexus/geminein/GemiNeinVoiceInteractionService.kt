@@ -1,4 +1,4 @@
-package com.example.gemi_nein
+package co.neonexus.geminein
 
 import android.service.voice.VoiceInteractionService
 

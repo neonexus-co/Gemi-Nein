@@ -1,4 +1,4 @@
-package com.example.gemi_nein
+package co.neonexus.geminein
 
 import android.Manifest
 import android.content.Intent
@@ -12,7 +12,6 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.widget.Button
 import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
@@ -33,7 +32,7 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val MICROPHONE_REQUEST = 100
-        const val EXTRA_START_LISTENING = "com.example.gemi_nein.START_LISTENING"
+        const val EXTRA_START_LISTENING = "co.neonexus.geminein.START_LISTENING"
     }
 
     private fun finishAssistantInvocation() {

@@ -1,11 +1,12 @@
 
-package com.example.gemi_nein
+package co.neonexus.geminein
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.service.voice.VoiceInteractionSession
 
-class GemiNeinSession(context: android.content.Context) :
+class GemiNeinSession(context: Context) :
     VoiceInteractionSession(context) {
 
     override fun onPrepareShow(args: Bundle?, showFlags: Int) {

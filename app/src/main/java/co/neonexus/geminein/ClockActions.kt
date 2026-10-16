@@ -1,4 +1,4 @@
-package com.example.gemi_nein
+package co.neonexus.geminein
 
 import android.content.Context
 import android.content.Intent
