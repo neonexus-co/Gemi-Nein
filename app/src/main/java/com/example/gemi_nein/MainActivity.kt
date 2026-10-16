@@ -9,6 +9,7 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.widget.Button
 import android.widget.TextView
 import android.widget.Toast
@@ -28,14 +29,25 @@ class MainActivity : AppCompatActivity() {
     private var textToSpeech: TextToSpeech? = null
     private var ttsReady = false
 
+    private var assistantInvocation = false
+
     companion object {
         private const val MICROPHONE_REQUEST = 100
         const val EXTRA_START_LISTENING = "com.example.gemi_nein.START_LISTENING"
     }
 
+    private fun finishAssistantInvocation() {
+        if (assistantInvocation && !isFinishing) {
+            finishAndRemoveTask()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (intent.getBooleanExtra(EXTRA_START_LISTENING, false)) {
+        assistantInvocation =
+            intent.getBooleanExtra(EXTRA_START_LISTENING, false)
+
+        if (assistantInvocation) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
         }
@@ -50,6 +62,34 @@ class MainActivity : AppCompatActivity() {
 
                 ttsReady = result != TextToSpeech.LANG_MISSING_DATA &&
                         result != TextToSpeech.LANG_NOT_SUPPORTED
+
+                textToSpeech?.setOnUtteranceProgressListener(
+                    object : UtteranceProgressListener() {
+                        override fun onStart(utteranceId: String?) {}
+
+                        override fun onDone(utteranceId: String?) {
+                            runOnUiThread {
+                                finishAssistantInvocation()
+                            }
+                        }
+
+                        @Deprecated("Deprecated in Java")
+                        override fun onError(utteranceId: String?) {
+                            runOnUiThread {
+                                finishAssistantInvocation()
+                            }
+                        }
+
+                        override fun onError(
+                            utteranceId: String?,
+                            errorCode: Int
+                        ) {
+                            runOnUiThread {
+                                finishAssistantInvocation()
+                            }
+                        }
+                    }
+                )
             }
         }
 
@@ -75,6 +115,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun speak(message: String) {
         if (!ttsReady) {
+            finishAssistantInvocation()
             return
         }
 
@@ -265,6 +306,25 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             statusText.text = "Couldn't start listening: ${e.message}"
             listenButton.isEnabled = true
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+
+        assistantInvocation =
+            intent.getBooleanExtra(EXTRA_START_LISTENING, false)
+
+        if (assistantInvocation) {
+            // Stop any leftover speech from the previous invocation.
+            textToSpeech?.stop()
+
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+
+            // Recheck permission and start a fresh listening cycle.
+            checkMicrophonePermission()
         }
     }
 
