@@ -7,6 +7,7 @@ import java.util.Locale
 sealed class AssistantCommand {
     data class SetTimer(val seconds: Int) : AssistantCommand()
     data class SetAlarm(val hour: Int, val minute: Int) : AssistantCommand()
+    object Cancel : AssistantCommand()
     data class Unknown(val originalText: String) : AssistantCommand()
 }
 
@@ -23,6 +24,19 @@ object AssistantCommandParser {
         val normalizedInput = input
             .replace(Regex("""\b([ap])\s*\.\s*m\s*\.?\b"""), "$1m")
             .replace(Regex("""\b([ap])\s*\.\s*m\b"""), "$1m")
+
+        // Recognize explicit cancellation phrases without matching
+        // commands such as "cancel the timer".
+        val cancellationText = normalizedInput.trimEnd('.', '!', '?', ',')
+
+        val cancelMatch = Regex(
+            """(?:please\s+)?(?:cancel(?:\s+(?:that|it|this))?|never\s+mind|nevermind|abort)(?:\s+please)?"""
+        )
+
+        if (cancelMatch.matches(cancellationText)) {
+            Log.i(TAG, "Cancellation command recognized")
+            return AssistantCommand.Cancel
+        }
 
         // Examples: "set a timer for 5 minutes"
         //           "set timer for 30 seconds"
@@ -59,14 +73,18 @@ object AssistantCommandParser {
         if (alarmMatch != null) {
             var hour = alarmMatch.groupValues[1].toIntOrNull()
                 ?: return AssistantCommand.Unknown(text)
-            val minute = alarmMatch.groupValues[2].takeIf { it.isNotEmpty() }
+
+            val minute = alarmMatch.groupValues[2]
+                .takeIf { it.isNotEmpty() }
                 ?.toIntOrNull() ?: 0
+
             val period = alarmMatch.groupValues[3]
 
             Log.i(
                 TAG,
                 "Alarm parse: input='$input', normalized='$normalizedInput', " +
-                        "match='${alarmMatch.value}', hour=$hour, minute=$minute, period='$period'"
+                        "match='${alarmMatch.value}', hour=$hour, " +
+                        "minute=$minute, period='$period'"
             )
 
             if (minute !in 0..59) {

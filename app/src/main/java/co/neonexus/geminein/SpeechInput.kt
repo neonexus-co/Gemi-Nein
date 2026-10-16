@@ -22,8 +22,11 @@ class SpeechInput(
     }
 
     private var speechRecognizer: SpeechRecognizer? = null
+    private var cancellationRequested = false
 
     fun startListening() {
+        cancellationRequested = false
+
         Log.i(
             TAG,
             "SpeechInput.startListening: " +
@@ -32,9 +35,7 @@ class SpeechInput(
 
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
             Log.e(TAG, "On-device recognition requires Android 12 or newer")
-            updateStatus(
-                "On-device recognition requires Android 12 or newer."
-            )
+            updateStatus("On-device recognition requires Android 12 or newer.")
             setListeningUiEnabled(true)
             return
         }
@@ -64,11 +65,15 @@ class SpeechInput(
             object : RecognitionListener {
 
                 override fun onReadyForSpeech(params: Bundle?) {
+                    if (cancellationRequested) return
+
                     Log.i(TAG, "RecognitionListener: onReadyForSpeech")
                     updateStatus("Listening... Speak now.")
                 }
 
                 override fun onBeginningOfSpeech() {
+                    if (cancellationRequested) return
+
                     Log.i(TAG, "RecognitionListener: onBeginningOfSpeech")
                     updateStatus("I hear you...")
                 }
@@ -80,11 +85,18 @@ class SpeechInput(
                 override fun onBufferReceived(buffer: ByteArray?) {}
 
                 override fun onEndOfSpeech() {
+                    if (cancellationRequested) return
+
                     Log.i(TAG, "RecognitionListener: onEndOfSpeech")
                     updateStatus("Processing speech...")
                 }
 
                 override fun onError(error: Int) {
+                    if (cancellationRequested) {
+                        Log.d(TAG, "Ignoring recognition error after cancellation")
+                        return
+                    }
+
                     Log.e(
                         TAG,
                         "RecognitionListener: onError " +
@@ -112,6 +124,11 @@ class SpeechInput(
                 }
 
                 override fun onResults(results: Bundle?) {
+                    if (cancellationRequested) {
+                        Log.d(TAG, "Ignoring recognition results after cancellation")
+                        return
+                    }
+
                     val matches = results?.getStringArrayList(
                         SpeechRecognizer.RESULTS_RECOGNITION
                     )
@@ -126,9 +143,7 @@ class SpeechInput(
 
                     if (spokenText == null) {
                         Log.w(TAG, "No usable transcription returned")
-                        updateStatus(
-                            "Sorry, I couldn't understand that."
-                        )
+                        updateStatus("Sorry, I couldn't understand that.")
                         setListeningUiEnabled(true)
                         return
                     }
@@ -138,6 +153,8 @@ class SpeechInput(
                 }
 
                 override fun onPartialResults(partialResults: Bundle?) {
+                    if (cancellationRequested) return
+
                     val count = partialResults
                         ?.getStringArrayList(
                             SpeechRecognizer.RESULTS_RECOGNITION
@@ -194,8 +211,22 @@ class SpeechInput(
         }
     }
 
+    fun stopListening() {
+        Log.i(TAG, "Cancelling speech recognition")
+        cancellationRequested = true
+
+        try {
+            speechRecognizer?.cancel()
+        } catch (e: Exception) {
+            Log.w(TAG, "Exception while cancelling speech recognition", e)
+        }
+
+        setListeningUiEnabled(true)
+    }
+
     fun destroy() {
         Log.i(TAG, "Destroying SpeechRecognizer")
+        cancellationRequested = true
         speechRecognizer?.destroy()
         speechRecognizer = null
     }
@@ -207,14 +238,11 @@ class SpeechInput(
             SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
                 "ERROR_INSUFFICIENT_PERMISSIONS"
             SpeechRecognizer.ERROR_NETWORK -> "ERROR_NETWORK"
-            SpeechRecognizer.ERROR_NETWORK_TIMEOUT ->
-                "ERROR_NETWORK_TIMEOUT"
+            SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "ERROR_NETWORK_TIMEOUT"
             SpeechRecognizer.ERROR_NO_MATCH -> "ERROR_NO_MATCH"
-            SpeechRecognizer.ERROR_RECOGNIZER_BUSY ->
-                "ERROR_RECOGNIZER_BUSY"
+            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "ERROR_RECOGNIZER_BUSY"
             SpeechRecognizer.ERROR_SERVER -> "ERROR_SERVER"
-            SpeechRecognizer.ERROR_SPEECH_TIMEOUT ->
-                "ERROR_SPEECH_TIMEOUT"
+            SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "ERROR_SPEECH_TIMEOUT"
             SpeechRecognizer.ERROR_SERVER_DISCONNECTED ->
                 "ERROR_SERVER_DISCONNECTED"
             else -> "UNKNOWN_ERROR"

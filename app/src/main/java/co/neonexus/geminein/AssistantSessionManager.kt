@@ -14,8 +14,13 @@ class AssistantSessionManager(
     var isAssistantInvocation: Boolean = false
         private set
 
+    var isCancellationRequested: Boolean = false
+        private set
+
     fun startInvocation() {
         isAssistantInvocation = true
+        isCancellationRequested = false
+
         activity.setShowWhenLocked(true)
         activity.setTurnScreenOn(true)
 
@@ -25,10 +30,27 @@ class AssistantSessionManager(
     fun updateInvocation(isAssistantInvocation: Boolean) {
         this.isAssistantInvocation = isAssistantInvocation
 
+        if (isAssistantInvocation) {
+            isCancellationRequested = false
+        }
+
         Log.i(
             TAG,
             "Assistant invocation updated: active=$isAssistantInvocation"
         )
+    }
+
+    fun requestCancellation() {
+        isCancellationRequested = true
+        Log.i(TAG, "Assistant cancellation requested")
+    }
+
+    fun finishCancelledInvocation() {
+        Log.i(TAG, "Finishing cancelled assistant invocation")
+
+        if (!activity.isFinishing && !activity.isDestroyed) {
+            activity.finishAndRemoveTask()
+        }
     }
 
     fun handleSpeechOutputFinished(
@@ -36,6 +58,11 @@ class AssistantSessionManager(
         startListening: () -> Unit
     ) {
         Log.i(TAG, "Handling speech completion: utteranceId=$utteranceId")
+
+        if (isCancellationRequested) {
+            Log.i(TAG, "Ignoring speech completion after cancellation")
+            return
+        }
 
         if (utteranceId == SpeechOutput.UTTERANCE_CONTINUE) {
             if (!activity.isFinishing && !activity.isDestroyed) {

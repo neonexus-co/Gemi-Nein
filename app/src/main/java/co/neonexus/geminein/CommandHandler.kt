@@ -7,7 +7,8 @@ import android.util.Log
 class CommandHandler(
     private val context: Context,
     private val updateStatus: (String) -> Unit,
-    private val speak: (String, Boolean) -> Unit
+    private val speak: (String, Boolean) -> Unit,
+    private val cancelAssistant: () -> Unit
 ) {
     companion object {
         private const val TAG = "GemiNeinVoice"
@@ -31,6 +32,12 @@ class CommandHandler(
 
             is AssistantCommand.SetAlarm -> {
                 handleSetAlarm(command)
+                false
+            }
+
+            is AssistantCommand.Cancel -> {
+                Log.i(TAG, "Handling Cancel command")
+                cancelAssistant()
                 false
             }
 
@@ -110,12 +117,11 @@ class CommandHandler(
 
         updateStatus(
             "I heard: \"$spokenText\"\n" +
-                    "Say help for suggestions, or cancel to exit."
+                    "Say cancel to exit."
         )
 
         speak(
-            "Sorry, I didn't understand that. " +
-                    "Say help for suggestions, or cancel to exit.",
+            "Sorry, I didn't understand that. Say cancel to exit.",
             true
         )
     }

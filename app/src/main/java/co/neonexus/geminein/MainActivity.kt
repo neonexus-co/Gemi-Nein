@@ -106,11 +106,18 @@ class MainActivity : AppCompatActivity() {
             },
             speak = { message, continueListening ->
                 speechController.speak(message, continueListening)
+            },
+            cancelAssistant = {
+                cancelAssistantInvocation()
             }
         )
 
         recognizedSpeechHandler = RecognizedSpeechHandler(
-            isActivityUnavailable = { isFinishing || isDestroyed },
+            isActivityUnavailable = {
+                isFinishing ||
+                        isDestroyed ||
+                        assistantSessionManager.isCancellationRequested
+            },
             updateStatus = { message ->
                 statusText.text = message
             },
@@ -148,12 +155,34 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startListening() {
-        if (isFinishing || isDestroyed) {
-            Log.w(TAG, "Skipping listening: activity is finishing or destroyed")
+        if (
+            isFinishing ||
+            isDestroyed ||
+            assistantSessionManager.isCancellationRequested
+        ) {
+            Log.w(TAG, "Skipping listening: activity unavailable or cancelled")
             return
         }
 
         speechInput?.startListening()
+    }
+
+    private fun cancelAssistantInvocation() {
+        if (assistantSessionManager.isCancellationRequested) {
+            Log.i(TAG, "Cancellation already requested")
+            return
+        }
+
+        Log.i(TAG, "Cancelling assistant interaction")
+
+        // Set the guard before stopping audio, since stopping TTS may
+        // trigger an utterance-completion callback.
+        assistantSessionManager.requestCancellation()
+
+        speechInput?.stopListening()
+        speechOutput?.stop()
+
+        assistantSessionManager.finishCancelledInvocation()
     }
 
     override fun onNewIntent(intent: Intent) {
