@@ -21,8 +21,8 @@ object AssistantCommandParser {
         // "p.m.", "p.m", "pm" -> "pm"
         // "a.m.", "a.m", "am" -> "am"
         val normalizedInput = input
-            .replace(Regex("""\b(a|p)\s*\.\s*m\s*\.?\b"""), "$1m")
-            .replace(Regex("""\b(a|p)\s*\.\s*m\b"""), "$1m")
+            .replace(Regex("""\b([ap])\s*\.\s*m\s*\.?\b"""), "$1m")
+            .replace(Regex("""\b([ap])\s*\.\s*m\b"""), "$1m")
 
         // Examples: "set a timer for 5 minutes"
         //           "set timer for 30 seconds"
