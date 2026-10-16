@@ -52,15 +52,15 @@ These are goals, not commitments to features that already exist.
 
 Gemi-nein is an Android application developed and initially tested on a **Google Pixel 7 Pro**.
 
-| Component | Technology |
-|---|---|
-| Language | Kotlin |
-| Platform | Android |
+| Component | Technology                               |
+|---|------------------------------------------|
+| Language | Kotlin                                   |
+| Platform | Android                                  |
 | Speech recognition | Android on-device `SpeechRecognizer` API |
-| Command interpretation | Local Kotlin logic |
-| Timers and alarms | Android clock intents |
-| Spoken feedback | Android Text-to-Speech |
-| Application ID | `com.example.gemi_nein` |
+| Command interpretation | Local Kotlin logic                       |
+| Timers and alarms | Android clock intents                    |
+| Spoken feedback | Android Text-to-Speech                   |
+| Application ID | `co.neonexus.geminein`                   |
 
 The current implementation requires Android 12 or newer for its on-device speech recognition path. Recognition availability also depends on the device's installed speech services and supported language models.
 
