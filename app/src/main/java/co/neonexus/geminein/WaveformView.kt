@@ -141,18 +141,18 @@ class WaveformView @JvmOverloads constructor(
         return (value - floor(value)).toFloat()
     }
 
-    // Smoothly invert selected regions without changing the main waveform.
+    // Square-mode inversion behavior: intentionally preserved.
     private fun inversion(
         progress: Float,
         time: Float,
         seed: Int
     ): Float {
-        val regionCount = 7
+        val regionCount = 11
         val regionPosition = progress * regionCount
         val region = floor(regionPosition).toInt()
         val localPosition = regionPosition - region
 
-        val selected = pseudoRandom(region + seed) > 0.58f
+        val selected = pseudoRandom(region + seed) > 0.34f
         if (!selected) return 1f
 
         val direction = if (pseudoRandom(region + seed + 97) > 0.5f) {
@@ -161,18 +161,103 @@ class WaveformView @JvmOverloads constructor(
             1f
         }
 
-        val motion = sin(time * 1.4f + region * 1.73f + seed)
-        val strength = (0.5f + motion * 0.5f).coerceIn(0f, 1f)
+        val motion = sin(time * 1.6f + region * 1.91f + seed)
+        val strength = (0.35f + motion * 0.65f).coerceIn(0f, 1f)
 
-        // Soft edges keep the inversions from popping abruptly.
         val edgeDistance = minOf(localPosition, 1f - localPosition)
-        val edgeBlend = (edgeDistance / 0.16f).coerceIn(0f, 1f)
+        val edgeBlend = (edgeDistance / 0.12f).coerceIn(0f, 1f)
         val smoothEdge = edgeBlend * edgeBlend * (3f - 2f * edgeBlend)
 
         return 1f + (direction * strength - 1f) * smoothEdge
     }
 
-    // Shift a color's hue while preserving its saturation and brightness.
+    // Sine-mode inversion: stable polarity inside each region, with
+    // transitions confined to narrow edges instead of broad flat sections.
+    private fun smoothSineInversion(
+        progress: Float,
+        seed: Int
+    ): Float {
+        val regionCount = 9
+        val regionPosition = progress * regionCount
+        val region = floor(regionPosition).toInt()
+        val localPosition = regionPosition - region
+
+        val selected = pseudoRandom(region + seed) > 0.32f
+        val direction = if (
+            selected && pseudoRandom(region + seed + 97) > 0.5f
+        ) {
+            -1f
+        } else {
+            1f
+        }
+
+        val edgeDistance = minOf(localPosition, 1f - localPosition)
+        val edgeBlend = (edgeDistance / 0.10f).coerceIn(0f, 1f)
+        val smoothEdge = edgeBlend * edgeBlend * (3f - 2f * edgeBlend)
+
+        return 1f + (direction - 1f) * smoothEdge
+    }
+
+    // Independent smooth sine harmonics for the non-speaking states.
+    private fun independentSineWave(
+        progress: Float,
+        time: Float,
+        seed: Int
+    ): Float {
+        val frequency = 0.75f + pseudoRandom(seed + 3) * 0.65f
+        val phaseOffset = pseudoRandom(seed + 9) * 2f * PI.toFloat()
+        val motionOffset = pseudoRandom(seed + 17) * 1.8f
+
+        val fundamental = sin(
+            progress * (7f + frequency * 2f) * PI.toFloat() +
+                    time * 0.85f + phaseOffset
+        ) * 0.58f
+
+        val harmonic = sin(
+            progress * (13f + frequency * 3f) * PI.toFloat() -
+                    time * 1.1f + phaseOffset * 1.4f
+        ) * 0.27f
+
+        val detail = sin(
+            progress * (21f + frequency * 4f) * PI.toFloat() +
+                    time * 0.65f + motionOffset
+        ) * 0.15f
+
+        return fundamental + harmonic + detail
+    }
+
+    // Independent square-wave generator: intentionally preserved.
+    private fun independentWave(
+        progress: Float,
+        time: Float,
+        seed: Int
+    ): Float {
+        val cycleCount = 3.2f + pseudoRandom(seed + 3) * 2.8f
+        val cyclePosition = progress * cycleCount
+        val cycleIndex = floor(cyclePosition).toInt()
+        val localPosition = cyclePosition - cycleIndex
+
+        val cycleVariation = 0.45f +
+                pseudoRandom(cycleIndex + seed + 17) * 0.9f
+
+        val polarity = if (
+            sin(
+                time * (0.65f + pseudoRandom(seed + 9)) +
+                        cycleIndex * (1.1f + pseudoRandom(seed + 11) * 2f) +
+                        pseudoRandom(cycleIndex + seed + 71) * 2f * PI
+            ) >= 0f
+        ) 1f else -1f
+
+        val dutyCycle = 0.2f +
+                pseudoRandom(cycleIndex + seed + 137) * 0.6f
+
+        return if (localPosition < dutyCycle) {
+            cycleVariation * polarity
+        } else {
+            -cycleVariation * polarity
+        }
+    }
+
     private fun shiftHue(color: Int, degrees: Float): Int {
         val hsv = FloatArray(3)
         Color.colorToHSV(color, hsv)
@@ -182,7 +267,6 @@ class WaveformView @JvmOverloads constructor(
         return Color.HSVToColor(Color.alpha(color), hsv)
     }
 
-    // Fill the area between two waveform traces.
     private fun buildRibbon(
         path: Path,
         firstPoints: FloatArray,
@@ -272,7 +356,6 @@ class WaveformView @JvmOverloads constructor(
         secondaryPath.reset()
         tertiaryPath.reset()
 
-        // Each trace stores its own points for ribbon construction.
         val primaryPoints = FloatArray((steps + 1) * 2)
         val secondaryPoints = FloatArray((steps + 1) * 2)
         val tertiaryPoints = FloatArray((steps + 1) * 2)
@@ -285,6 +368,7 @@ class WaveformView @JvmOverloads constructor(
             val taperedEnvelope = envelopeBase * envelopeBase
             val envelope = taperedEnvelope * (1f - shapeBlend) + shapeBlend
 
+            // Primary waveform remains unchanged.
             val cyclePosition = progress * squareCycles
             val cycleIndex = floor(cyclePosition).toInt()
             val localCyclePosition = cyclePosition - cycleIndex
@@ -303,35 +387,83 @@ class WaveformView @JvmOverloads constructor(
             val dutyCycle = 0.35f +
                     pseudoRandom(cycleIndex + 137) * 0.3f
 
-            val sineWave = (
+            val primarySine = (
                     sin(progress * 9f * PI + phase) * 0.62f +
                             sin(progress * 17f * PI - phase * 1.25f) * 0.27f +
                             sin(progress * 27f * PI + phase * 0.65f) * 0.11f
                     ).toFloat()
 
-            val squareWave = if (localCyclePosition < dutyCycle) {
+            val primarySquare = if (localCyclePosition < dutyCycle) {
                 cycleVariation * polarity
             } else {
                 -cycleVariation * polarity
             }
 
-            val combinedWave =
-                sineWave * (1f - shapeBlend) +
-                        squareWave * shapeBlend
+            val primaryWave =
+                primarySine * (1f - shapeBlend) +
+                        primarySquare * shapeBlend
 
-            val displacement = combinedWave * amplitude * envelope
+            val primaryDisplacement = primaryWave * amplitude * envelope
+            val primaryY = centerY + primaryDisplacement
 
-            // The outer traces independently invert selected regions.
-            val secondaryInversion = inversion(progress, phase, 13)
-            val tertiaryInversion = inversion(progress, phase + 1.7f, 41)
+            // Sine mode: independent smooth curves with stronger divergence.
+            val secondarySine = independentSineWave(
+                progress = progress,
+                time = phase,
+                seed = 137
+            )
 
-            val primaryY = centerY + displacement
-            val secondaryY = centerY +
-                    displacement * 1.25f * secondaryInversion -
+            val tertiarySine = independentSineWave(
+                progress = progress,
+                time = phase + 2.3f,
+                seed = 419
+            )
+
+            val secondarySineY = centerY +
+                    secondarySine * amplitude * 0.8f * envelope *
+                    smoothSineInversion(progress, 13) -
                     height * 0.025f
-            val tertiaryY = centerY +
-                    displacement * 1.25f * tertiaryInversion +
+
+            val tertiarySineY = centerY +
+                    tertiarySine * amplitude * 0.6f * envelope *
+                    smoothSineInversion(progress, 41) +
                     height * 0.025f
+
+            // Square mode: retain the established independent shapes and inversions.
+            val secondarySquare = independentWave(
+                progress = progress,
+                time = phase,
+                seed = 137
+            )
+
+            val tertiarySquare = independentWave(
+                progress = progress,
+                time = phase + 2.3f,
+                seed = 419
+            )
+
+            val secondarySquareAmplitude = amplitude *
+                    (0.95f + pseudoRandom(137) * 0.45f)
+
+            val tertiarySquareAmplitude = amplitude *
+                    (0.95f + pseudoRandom(419) * 0.45f)
+
+            val secondarySquareY = centerY +
+                    secondarySquare * secondarySquareAmplitude * envelope *
+                    inversion(progress, phase, 13) -
+                    height * 0.025f
+
+            val tertiarySquareY = centerY +
+                    tertiarySquare * tertiarySquareAmplitude * envelope *
+                    inversion(progress, phase + 1.7f, 41) +
+                    height * 0.025f
+
+            // Smoothly transition between sine and square personalities.
+            val secondaryY = secondarySineY * (1f - shapeBlend) +
+                    secondarySquareY * shapeBlend
+
+            val tertiaryY = tertiarySineY * (1f - shapeBlend) +
+                    tertiarySquareY * shapeBlend
 
             primaryPoints[i * 2] = x
             primaryPoints[i * 2 + 1] = primaryY
@@ -353,7 +485,6 @@ class WaveformView @JvmOverloads constructor(
             }
         }
 
-        // Both ribbons use the primary waveform as their shared base.
         buildRibbon(
             secondaryRibbonPath,
             primaryPoints,
@@ -379,31 +510,32 @@ class WaveformView @JvmOverloads constructor(
             }
         }
 
-        // Subtle hue shifts keep the layers related without making them identical.
-        val secondaryBaseColor = shiftHue(color, 12f)
-        val tertiaryBaseColor = shiftHue(color, -12f)
+        val secondaryBaseColor = shiftHue(color, 18f)
+        val tertiaryBaseColor = shiftHue(color, -22f)
 
         val secondaryColor =
             (secondaryBaseColor and 0x00FFFFFF) or 0xAA000000.toInt()
+
         val tertiaryColor =
             (tertiaryBaseColor and 0x00FFFFFF) or 0x66000000
 
-        // Paint the two ribbons separately so each follows its own outer trace.
         ribbonPaint.color =
-            (secondaryBaseColor and 0x00FFFFFF) or 0x38000000
+            (secondaryBaseColor and 0x00FFFFFF) or 0x42000000
         canvas.drawPath(secondaryRibbonPath, ribbonPaint)
 
         ribbonPaint.color =
-            (tertiaryBaseColor and 0x00FFFFFF) or 0x30000000
+            (tertiaryBaseColor and 0x00FFFFFF) or 0x38000000
         canvas.drawPath(tertiaryRibbonPath, ribbonPaint)
 
-        // Broad bloom beneath the traces.
         bloomPaint.color = (color and 0x00FFFFFF) or 0x26000000
         canvas.drawPath(wavePath, bloomPaint)
+
+        bloomPaint.color = (secondaryBaseColor and 0x00FFFFFF) or 0x22000000
         canvas.drawPath(secondaryPath, bloomPaint)
+
+        bloomPaint.color = (tertiaryBaseColor and 0x00FFFFFF) or 0x1C000000
         canvas.drawPath(tertiaryPath, bloomPaint)
 
-        // Tighter glow around the primary trace.
         glowPaint.color = (color and 0x00FFFFFF) or 0x66000000
         canvas.drawPath(wavePath, glowPaint)
 
