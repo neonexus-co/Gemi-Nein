@@ -527,12 +527,14 @@ class WaveformView @JvmOverloads constructor(
         val tertiaryColor =
             (tertiaryBaseColor and 0x00FFFFFF) or 0x66000000
 
+// First ribbon: 80% opacity
         ribbonPaint.color =
-            (secondaryBaseColor and 0x00FFFFFF) or 0x42000000
+            (secondaryBaseColor and 0x00FFFFFF) or 0x66000000.toInt()
         canvas.drawPath(secondaryRibbonPath, ribbonPaint)
 
+// Second ribbon: 35% opacity
         ribbonPaint.color =
-            (tertiaryBaseColor and 0x00FFFFFF) or 0x38000000
+            (tertiaryBaseColor and 0x00FFFFFF) or 0x26000000
         canvas.drawPath(tertiaryRibbonPath, ribbonPaint)
 
         bloomPaint.color = (color and 0x00FFFFFF) or 0x26000000
