@@ -11,37 +11,32 @@
         android:layout_height="match_parent"
         android:contentDescription="@string/audio_waveform" />
 
-    <LinearLayout
+    <TextView
+        android:id="@+id/statusText"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_horizontal|center_vertical"
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginTop="-36dp"
         android:gravity="center"
-        android:orientation="vertical"
-        android:paddingVertical="16dp">
+        android:minHeight="56dp"
+        android:text="@string/ready_when_you_are"
+        android:textColor="#C6D4FF"
+        android:textSize="18sp" />
 
-        <TextView
-            android:id="@+id/statusText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:gravity="center"
-            android:minHeight="56dp"
-            android:text="@string/ready_when_you_are"
-            android:textColor="#C6D4FF"
-            android:textSize="18sp" />
+    <ImageButton
+        android:id="@+id/listenButton"
+        android:layout_width="76dp"
+        android:layout_height="76dp"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="32dp"
+        android:background="@drawable/gemi_button_background"
+        android:backgroundTint="@null"
+        android:contentDescription="@string/speak_to_gemi_nein"
+        android:elevation="8dp"
+        android:padding="22dp"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_mic"
+        android:stateListAnimator="@null" />
 
-        <Button
-            android:id="@+id/listenButton"
-            android:layout_width="220dp"
-            android:layout_height="56dp"
-            android:layout_marginTop="24dp"
-            android:background="@drawable/gemi_button_background"
-            android:backgroundTint="@null"
-            android:elevation="8dp"
-            android:stateListAnimator="@null"
-            android:text="@string/speak_to_gemi_nein"
-            android:textAllCaps="false"
-            android:textColor="#FFFFFF"
-            android:textSize="16sp" />
-
-    </LinearLayout>
 </FrameLayout>

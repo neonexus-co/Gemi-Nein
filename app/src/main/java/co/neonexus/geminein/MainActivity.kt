@@ -3,7 +3,7 @@ package co.neonexus.geminein
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
-import android.widget.Button
+import android.widget.ImageButton
 import android.widget.TextView
 import androidx.activity.enableEdgeToEdge
 import androidx.appcompat.app.AppCompatActivity
@@ -13,7 +13,7 @@ import androidx.core.view.WindowInsetsCompat
 class MainActivity : AppCompatActivity() {
 
     private lateinit var statusText: TextView
-    private lateinit var listenButton: Button
+    private lateinit var listenButton: ImageButton
     private lateinit var waveformView: WaveformView
 
     private var speechInput: SpeechInput? = null
@@ -117,6 +117,15 @@ class MainActivity : AppCompatActivity() {
             onSpeechStarted = {
                 runOnUiThread {
                     waveformView.onSpeechStarted()
+                }
+            },
+            onSpeechTimeout = {
+                runOnUiThread {
+                    statusText.text = "I didn't hear anything. Try again."
+                    waveformView.setAudioLevel(0f)
+                    waveformView.setListening(false)
+                    waveformView.setState(WaveformView.State.IDLE)
+                    listenButton.isEnabled = true
                 }
             }
         )

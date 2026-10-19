@@ -1,4 +1,3 @@
-
 package co.neonexus.geminein
 
 import android.content.Context
@@ -17,7 +16,8 @@ class SpeechInput(
     private val setListeningUiEnabled: (Boolean) -> Unit,
     private val onResult: (String) -> Unit,
     private val onAudioLevelChanged: (Float) -> Unit = {},
-    private val onSpeechStarted: () -> Unit = {}
+    private val onSpeechStarted: () -> Unit = {},
+    private val onSpeechTimeout: (() -> Unit)? = null
 ) {
     companion object {
         private const val TAG = "GemiNeinVoice"
@@ -84,12 +84,13 @@ class SpeechInput(
                 override fun onRmsChanged(rmsdB: Float) {
                     if (cancellationRequested) return
 
-                    // Convert the recognizer's approximate dB level into
-                    // a stable 0..1 visual intensity value.
                     val normalizedLevel =
                         ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
 
-                    Log.d(TAG, "Microphone RMS: $rmsdB dB, normalized: $normalizedLevel")
+                    Log.d(
+                        TAG,
+                        "Microphone RMS: $rmsdB dB, normalized: $normalizedLevel"
+                    )
                     onAudioLevelChanged(normalizedLevel)
                 }
 
@@ -105,7 +106,10 @@ class SpeechInput(
 
                 override fun onError(error: Int) {
                     if (cancellationRequested) {
-                        Log.d(TAG, "Ignoring recognition error after cancellation")
+                        Log.d(
+                            TAG,
+                            "Ignoring recognition error after cancellation"
+                        )
                         return
                     }
 
@@ -117,14 +121,31 @@ class SpeechInput(
 
                     onAudioLevelChanged(0f)
 
+                    if (
+                        error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT ||
+                        error == SpeechRecognizer.ERROR_NO_MATCH
+                    ) {
+                        if (onSpeechTimeout != null) {
+                            Log.i(
+                                TAG,
+                                "Silence/no-match received; invoking timeout callback"
+                            )
+                            onSpeechTimeout.invoke()
+                            return
+                        }
+
+                        if (error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) {
+                            updateStatus("I didn't hear anything. Try again.")
+                        } else {
+                            updateStatus("I didn't catch that. Please try again.")
+                        }
+
+                        setListeningUiEnabled(true)
+                        return
+                    }
+
                     updateStatus(
                         when (error) {
-                            SpeechRecognizer.ERROR_NO_MATCH ->
-                                "I didn't catch that. Please try again."
-
-                            SpeechRecognizer.ERROR_SPEECH_TIMEOUT ->
-                                "I didn't hear anything. Try again."
-
                             SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS ->
                                 "Microphone permission is missing."
 
@@ -139,7 +160,10 @@ class SpeechInput(
 
                 override fun onResults(results: Bundle?) {
                     if (cancellationRequested) {
-                        Log.d(TAG, "Ignoring recognition results after cancellation")
+                        Log.d(
+                            TAG,
+                            "Ignoring recognition results after cancellation"
+                        )
                         return
                     }
 

@@ -2,11 +2,13 @@
 package co.neonexus.geminein
 
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.service.voice.VoiceInteractionSession
 import android.util.Log
 import android.view.Gravity
 import android.view.View
+import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.TextView
 
@@ -15,6 +17,8 @@ class GemiNeinSession(context: android.content.Context) :
 
     companion object {
         private const val TAG = "GemiNeinVoice"
+        private const val BLUR_RADIUS = 48
+        private const val BACKDROP_ALPHA = 70
     }
 
     private var waveform: WaveformView? = null
@@ -27,9 +31,23 @@ class GemiNeinSession(context: android.content.Context) :
     private var pendingContinueListening = false
 
     override fun onCreateContentView(): View {
+        configureBackdrop()
+
         val root = FrameLayout(context).apply {
-            setBackgroundColor(Color.TRANSPARENT)
+            setBackgroundColor(
+                Color.argb(BACKDROP_ALPHA, 12, 16, 24)
+            )
         }
+
+//        val spotlightView = AssistantSpotlightView(context)
+//
+//        root.addView(
+//            spotlightView,
+//            FrameLayout.LayoutParams(
+//                FrameLayout.LayoutParams.MATCH_PARENT,
+//                FrameLayout.LayoutParams.MATCH_PARENT
+//            )
+//        )
 
         val sessionWaveform = WaveformView(context).apply {
             setBackgroundColor(Color.TRANSPARENT)
@@ -65,6 +83,27 @@ class GemiNeinSession(context: android.content.Context) :
         )
 
         return root
+    }
+
+    private fun configureBackdrop() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+            Log.i(TAG, "Window blur unavailable below Android 12")
+            return
+        }
+
+        val window = getWindow().window ?: return
+
+        window.addFlags(
+            WindowManager.LayoutParams.FLAG_BLUR_BEHIND or
+                    WindowManager.LayoutParams.FLAG_DIM_BEHIND
+        )
+
+        val params = window.attributes
+        params.blurBehindRadius = BLUR_RADIUS
+        window.attributes = params
+        window.setDimAmount(0.12f)
+
+        Log.i(TAG, "Configured assistant backdrop blur")
     }
 
     override fun onShow(args: Bundle?, showFlags: Int) {
@@ -160,6 +199,10 @@ class GemiNeinSession(context: android.content.Context) :
             },
             onSpeechStarted = {
                 waveform?.onSpeechStarted()
+            },
+            onSpeechTimeout = {
+                Log.i(TAG, "Speech timed out; cancelling assistant interaction")
+                finishSession()
             }
         )
 
@@ -191,7 +234,10 @@ class GemiNeinSession(context: android.content.Context) :
         }
     }
 
-    private fun speakResponse(message: String, continueListening: Boolean) {
+    private fun speakResponse(
+        message: String,
+        continueListening: Boolean
+    ) {
         if (sessionUnavailable) return
 
         val output = speechOutput
