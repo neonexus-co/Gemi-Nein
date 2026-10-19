@@ -3,6 +3,8 @@ package co.neonexus.geminein
 
 import android.content.Context
 import android.util.Log
+import java.util.Calendar
+import java.util.Locale
 
 class CommandHandler(
     private val context: Context,
@@ -14,12 +16,6 @@ class CommandHandler(
         private const val TAG = "GemiNeinVoice"
     }
 
-    /**
-     * Executes a parsed command.
-     *
-     * Returns true when the assistant should continue listening
-     * after speaking its response.
-     */
     fun handle(
         command: AssistantCommand,
         spokenText: String
@@ -35,6 +31,25 @@ class CommandHandler(
                 false
             }
 
+            is AssistantCommand.SetRecurringAlarm -> {
+                handleSetRecurringAlarm(command)
+                false
+            }
+
+            is AssistantCommand.NeedsTimerDuration -> {
+                val prompt = "Okay, how long should I set the timer for?"
+                updateStatus(prompt)
+                speak(prompt, true)
+                true
+            }
+
+            is AssistantCommand.NeedsAlarmTime -> {
+                val prompt = "Okay, what time should I set the alarm for?"
+                updateStatus(prompt)
+                speak(prompt, true)
+                true
+            }
+
             is AssistantCommand.Cancel -> {
                 Log.i(TAG, "Handling Cancel command")
                 cancelAssistant()
@@ -48,9 +63,7 @@ class CommandHandler(
         }
     }
 
-    private fun handleSetTimer(
-        command: AssistantCommand.SetTimer
-    ) {
+    private fun handleSetTimer(command: AssistantCommand.SetTimer) {
         Log.i(TAG, "Handling SetTimer command")
 
         try {
@@ -82,9 +95,7 @@ class CommandHandler(
         }
     }
 
-    private fun handleSetAlarm(
-        command: AssistantCommand.SetAlarm
-    ) {
+    private fun handleSetAlarm(command: AssistantCommand.SetAlarm) {
         Log.i(TAG, "Handling SetAlarm command")
 
         try {
@@ -94,15 +105,8 @@ class CommandHandler(
                 command.minute
             )
 
-            val hour12 = when (command.hour % 12) {
-                0 -> 12
-                else -> command.hour % 12
-            }
-
-            val period = if (command.hour < 12) "AM" else "PM"
-
             val confirmation =
-                "Alarm set for $hour12:%02d $period".format(command.minute)
+                "Alarm set for ${formatTime(command.hour, command.minute)}."
 
             updateStatus(confirmation)
             speak(confirmation, false)
@@ -112,16 +116,65 @@ class CommandHandler(
         }
     }
 
+    private fun handleSetRecurringAlarm(
+        command: AssistantCommand.SetRecurringAlarm
+    ) {
+        Log.i(TAG, "Handling SetRecurringAlarm command")
+
+        try {
+            ClockActions.setRecurringAlarm(
+                context,
+                command.hour,
+                command.minute,
+                command.days
+            )
+
+            val dayNames = command.days
+                .sorted()
+                .joinToString(", ") { dayName(it) }
+
+            val confirmation =
+                "Recurring alarm set for ${formatTime(command.hour, command.minute)} " +
+                        "on $dayNames."
+
+            updateStatus(confirmation)
+            speak(confirmation, false)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set recurring alarm", e)
+            updateStatus(e.message ?: "Couldn't set the recurring alarm.")
+        }
+    }
+
+    private fun formatTime(hour: Int, minute: Int): String {
+        val hour12 = when (hour % 12) {
+            0 -> 12
+            else -> hour % 12
+        }
+
+        val period = if (hour < 12) "AM" else "PM"
+        return String.format(Locale.ROOT, "%d:%02d %s", hour12, minute, period)
+    }
+
+    private fun dayName(day: Int): String {
+        return when (day) {
+            Calendar.SUNDAY -> "Sunday"
+            Calendar.MONDAY -> "Monday"
+            Calendar.TUESDAY -> "Tuesday"
+            Calendar.WEDNESDAY -> "Wednesday"
+            Calendar.THURSDAY -> "Thursday"
+            Calendar.FRIDAY -> "Friday"
+            Calendar.SATURDAY -> "Saturday"
+            else -> "unknown day"
+        }
+    }
+
     private fun handleUnknown(spokenText: String) {
         Log.i(TAG, "Handling Unknown command")
 
-        updateStatus(
-            "I heard: \"$spokenText\"\n" +
-                    "Say cancel to exit."
-        )
+        updateStatus("I heard: \"$spokenText\"\n")
 
         speak(
-            "Sorry, I didn't understand that. Say cancel to exit.",
+            "Sorry, I didn't understand that.",
             true
         )
     }

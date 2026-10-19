@@ -1,3 +1,4 @@
+
 package co.neonexus.geminein
 
 import android.content.Context
@@ -22,6 +23,25 @@ object ClockActions {
             putExtra(AlarmClock.EXTRA_MINUTES, minute)
             putExtra(AlarmClock.EXTRA_SKIP_UI, true)
             putExtra(AlarmClock.EXTRA_MESSAGE, "Gemi-nein alarm")
+        }
+
+        launchClockAction(context, intent)
+    }
+
+    fun setRecurringAlarm(
+        context: Context,
+        hour: Int,
+        minute: Int,
+        days: List<Int>
+    ) {
+        require(days.isNotEmpty()) { "At least one recurrence day is required." }
+
+        val intent = Intent(AlarmClock.ACTION_SET_ALARM).apply {
+            putExtra(AlarmClock.EXTRA_HOUR, hour)
+            putExtra(AlarmClock.EXTRA_MINUTES, minute)
+            putIntegerArrayListExtra(AlarmClock.EXTRA_DAYS, ArrayList(days))
+            putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+            putExtra(AlarmClock.EXTRA_MESSAGE, "Gemi-nein recurring alarm")
         }
 
         launchClockAction(context, intent)
