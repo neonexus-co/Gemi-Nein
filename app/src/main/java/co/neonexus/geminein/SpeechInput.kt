@@ -69,7 +69,7 @@ class SpeechInput(
                     if (cancellationRequested) return
 
                     Log.i(TAG, "RecognitionListener: onReadyForSpeech")
-                    updateStatus("Listening... Speak now.")
+                    updateStatus("Ready... Speak now.")
                     onAudioLevelChanged(0f)
                 }
 
@@ -77,7 +77,7 @@ class SpeechInput(
                     if (cancellationRequested) return
 
                     Log.i(TAG, "RecognitionListener: onBeginningOfSpeech")
-                    updateStatus("I hear you...")
+                    updateStatus("Listening...")
                     onSpeechStarted()
                 }
 

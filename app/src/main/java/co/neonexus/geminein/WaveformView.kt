@@ -4,6 +4,7 @@ package co.neonexus.geminein
 import android.content.Context
 import android.graphics.BlurMaskFilter
 import android.graphics.Canvas
+import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.util.AttributeSet
@@ -11,6 +12,7 @@ import android.view.View
 import android.view.animation.AnimationUtils
 import kotlin.math.PI
 import kotlin.math.exp
+import kotlin.math.floor
 import kotlin.math.sin
 
 class WaveformView @JvmOverloads constructor(
@@ -34,24 +36,50 @@ class WaveformView @JvmOverloads constructor(
 
     private val wavePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.BUTT
-        strokeJoin = Paint.Join.MITER
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
         strokeWidth = 3.5f
+    }
+
+    private val secondaryPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+        strokeWidth = 2.4f
+    }
+
+    private val tertiaryPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+        strokeWidth = 1.8f
+    }
+
+    private val ribbonPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.FILL
     }
 
     private val glowPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeCap = Paint.Cap.BUTT
-        strokeJoin = Paint.Join.MITER
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
         strokeWidth = 13f
-        color = 0x663D7CFF
-        maskFilter = BlurMaskFilter(
-            16f,
-            BlurMaskFilter.Blur.NORMAL
-        )
+        maskFilter = BlurMaskFilter(12f, BlurMaskFilter.Blur.NORMAL)
+    }
+
+    private val bloomPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        strokeCap = Paint.Cap.ROUND
+        strokeJoin = Paint.Join.ROUND
+        strokeWidth = 25f
+        maskFilter = BlurMaskFilter(28f, BlurMaskFilter.Blur.NORMAL)
     }
 
     private val wavePath = Path()
+    private val secondaryPath = Path()
+    private val tertiaryPath = Path()
+    private val secondaryRibbonPath = Path()
+    private val tertiaryRibbonPath = Path()
 
     private var targetAudioLevel = 0f
     private var smoothedAudioLevel = 0f
@@ -107,6 +135,83 @@ class WaveformView @JvmOverloads constructor(
         postInvalidateOnAnimation()
     }
 
+    // Repeatable pseudo-random values between 0 and 1.
+    private fun pseudoRandom(seed: Int): Float {
+        val value = sin(seed.toDouble() * 127.1 + 311.7) * 43758.5453
+        return (value - floor(value)).toFloat()
+    }
+
+    // Smoothly invert selected regions without changing the main waveform.
+    private fun inversion(
+        progress: Float,
+        time: Float,
+        seed: Int
+    ): Float {
+        val regionCount = 7
+        val regionPosition = progress * regionCount
+        val region = floor(regionPosition).toInt()
+        val localPosition = regionPosition - region
+
+        val selected = pseudoRandom(region + seed) > 0.58f
+        if (!selected) return 1f
+
+        val direction = if (pseudoRandom(region + seed + 97) > 0.5f) {
+            -1f
+        } else {
+            1f
+        }
+
+        val motion = sin(time * 1.4f + region * 1.73f + seed)
+        val strength = (0.5f + motion * 0.5f).coerceIn(0f, 1f)
+
+        // Soft edges keep the inversions from popping abruptly.
+        val edgeDistance = minOf(localPosition, 1f - localPosition)
+        val edgeBlend = (edgeDistance / 0.16f).coerceIn(0f, 1f)
+        val smoothEdge = edgeBlend * edgeBlend * (3f - 2f * edgeBlend)
+
+        return 1f + (direction * strength - 1f) * smoothEdge
+    }
+
+    // Shift a color's hue while preserving its saturation and brightness.
+    private fun shiftHue(color: Int, degrees: Float): Int {
+        val hsv = FloatArray(3)
+        Color.colorToHSV(color, hsv)
+
+        hsv[0] = (hsv[0] + degrees + 360f) % 360f
+
+        return Color.HSVToColor(Color.alpha(color), hsv)
+    }
+
+    // Fill the area between two waveform traces.
+    private fun buildRibbon(
+        path: Path,
+        firstPoints: FloatArray,
+        secondPoints: FloatArray,
+        steps: Int
+    ) {
+        path.reset()
+
+        for (i in 0..steps) {
+            val x = firstPoints[i * 2]
+            val y = firstPoints[i * 2 + 1]
+
+            if (i == 0) {
+                path.moveTo(x, y)
+            } else {
+                path.lineTo(x, y)
+            }
+        }
+
+        for (i in steps downTo 0) {
+            path.lineTo(
+                secondPoints[i * 2],
+                secondPoints[i * 2 + 1]
+            )
+        }
+
+        path.close()
+    }
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
@@ -119,27 +224,21 @@ class WaveformView @JvmOverloads constructor(
         val deltaSeconds = if (lastFrameTime == 0L) {
             0f
         } else {
-            ((now - lastFrameTime).coerceAtMost(50L)) / 1000f
+            (now - lastFrameTime).coerceAtMost(50L) / 1000f
         }
 
         lastFrameTime = now
 
-        val smoothing = if (targetAudioLevel > smoothedAudioLevel) {
-            10f
-        } else {
-            4f
-        }
+        val smoothing = if (targetAudioLevel > smoothedAudioLevel) 10f else 4f
+        val audioBlend = 1f - exp(-smoothing * deltaSeconds)
 
-        val blend = 1f - exp(-smoothing * deltaSeconds)
         smoothedAudioLevel +=
-            (targetAudioLevel - smoothedAudioLevel) * blend
+            (targetAudioLevel - smoothedAudioLevel) * audioBlend
 
-        val targetShapeBlend =
-            if (state == State.SPEAKING) 1f else 0f
+        val targetShapeBlend = if (state == State.SPEAKING) 1f else 0f
+        val shapeTransition = 1f - exp(-8f * deltaSeconds)
 
-        shapeBlend +=
-            (targetShapeBlend - shapeBlend) *
-                    (1f - exp(-8f * deltaSeconds))
+        shapeBlend += (targetShapeBlend - shapeBlend) * shapeTransition
 
         val phaseSpeed = when (state) {
             State.IDLE -> 0.85f
@@ -159,25 +258,50 @@ class WaveformView @JvmOverloads constructor(
 
         val levelContribution = when (state) {
             State.LISTENING -> smoothedAudioLevel * 0.75f
-            State.SPEAKING ->
-                0.10f + (sin(phase * 1.8f) + 1f) * 0.05f
+            State.SPEAKING -> 0.10f + (sin(phase * 1.8f) + 1f) * 0.05f
             State.PROCESSING -> 0.015f
             State.IDLE -> 0f
         }
 
         val amplitude = height * (idleAmplitude + levelContribution)
         val halfWidth = width * 0.46f
-        val steps = 180
+        val steps = 240
+        val squareCycles = 4f
 
         wavePath.reset()
+        secondaryPath.reset()
+        tertiaryPath.reset()
+
+        // Each trace stores its own points for ribbon construction.
+        val primaryPoints = FloatArray((steps + 1) * 2)
+        val secondaryPoints = FloatArray((steps + 1) * 2)
+        val tertiaryPoints = FloatArray((steps + 1) * 2)
 
         for (i in 0..steps) {
             val progress = i.toFloat() / steps
             val x = centerX - halfWidth + progress * halfWidth * 2f
 
-            val envelope = sin(progress * PI).toFloat()
-                .coerceAtLeast(0f)
-                .let { it * it }
+            val envelopeBase = sin(progress * PI).toFloat().coerceAtLeast(0f)
+            val taperedEnvelope = envelopeBase * envelopeBase
+            val envelope = taperedEnvelope * (1f - shapeBlend) + shapeBlend
+
+            val cyclePosition = progress * squareCycles
+            val cycleIndex = floor(cyclePosition).toInt()
+            val localCyclePosition = cyclePosition - cycleIndex
+
+            val cycleMotion = phase * 0.7f + cycleIndex * 1.37f
+            val cycleVariation = 0.55f +
+                    pseudoRandom(cycleIndex + 17) * 0.55f
+
+            val polarity = if (
+                sin(
+                    cycleMotion +
+                            pseudoRandom(cycleIndex + 71) * 2f * PI
+                ) >= 0f
+            ) 1f else -1f
+
+            val dutyCycle = 0.35f +
+                    pseudoRandom(cycleIndex + 137) * 0.3f
 
             val sineWave = (
                     sin(progress * 9f * PI + phase) * 0.62f +
@@ -185,64 +309,64 @@ class WaveformView @JvmOverloads constructor(
                             sin(progress * 27f * PI + phase * 0.65f) * 0.11f
                     ).toFloat()
 
-            // Four cycles across the waveform, with flat plateaus
-            // and abrupt vertical transitions.
-            val squareCycles = 4f
-            val cyclePosition =
-                ((progress * squareCycles + phase / (2f * PI)) % 1f
-                        + 1f) % 1f
-
-            val squareWave = if (cyclePosition < 0.5f) 1f else -1f
+            val squareWave = if (localCyclePosition < dutyCycle) {
+                cycleVariation * polarity
+            } else {
+                -cycleVariation * polarity
+            }
 
             val combinedWave =
                 sineWave * (1f - shapeBlend) +
                         squareWave * shapeBlend
 
-            val y = centerY + combinedWave * amplitude * envelope
+            val displacement = combinedWave * amplitude * envelope
+
+            // The outer traces independently invert selected regions.
+            val secondaryInversion = inversion(progress, phase, 13)
+            val tertiaryInversion = inversion(progress, phase + 1.7f, 41)
+
+            val primaryY = centerY + displacement
+            val secondaryY = centerY +
+                    displacement * 1.25f * secondaryInversion -
+                    height * 0.025f
+            val tertiaryY = centerY +
+                    displacement * 1.25f * tertiaryInversion +
+                    height * 0.025f
+
+            primaryPoints[i * 2] = x
+            primaryPoints[i * 2 + 1] = primaryY
+
+            secondaryPoints[i * 2] = x
+            secondaryPoints[i * 2 + 1] = secondaryY
+
+            tertiaryPoints[i * 2] = x
+            tertiaryPoints[i * 2 + 1] = tertiaryY
 
             if (i == 0) {
-                wavePath.moveTo(x, y)
+                wavePath.moveTo(x, primaryY)
+                secondaryPath.moveTo(x, secondaryY)
+                tertiaryPath.moveTo(x, tertiaryY)
             } else {
-                wavePath.lineTo(x, y)
+                wavePath.lineTo(x, primaryY)
+                secondaryPath.lineTo(x, secondaryY)
+                tertiaryPath.lineTo(x, tertiaryY)
             }
         }
 
-        // Draw exact horizontal and vertical square-wave sections
-        // when speaking, instead of relying on sampled sine points.
-        if (state == State.SPEAKING && shapeBlend > 0.98f) {
-            wavePath.reset()
+        // Both ribbons use the primary waveform as their shared base.
+        buildRibbon(
+            secondaryRibbonPath,
+            primaryPoints,
+            secondaryPoints,
+            steps
+        )
 
-            val cycles = 4
-            val cycleWidth = halfWidth * 2f / cycles
-
-            for (cycle in 0 until cycles) {
-                val x0 = centerX - halfWidth + cycle * cycleWidth
-                val x1 = x0 + cycleWidth * 0.5f
-                val x2 = x0 + cycleWidth
-
-                val p0 = (cycle.toFloat() / cycles)
-                val p1 = ((cycle + 0.5f) / cycles)
-                val p2 = ((cycle + 1f) / cycles)
-
-                val y0 = centerY +
-                        amplitude * sin(p0 * PI).toFloat().let { it * it }
-
-                val y1 = centerY -
-                        amplitude * sin(p1 * PI).toFloat().let { it * it }
-
-                val y2 = centerY +
-                        amplitude * sin(p2 * PI).toFloat().let { it * it }
-
-                if (cycle == 0) {
-                    wavePath.moveTo(x0, y0)
-                }
-
-                wavePath.lineTo(x1, y0)
-                wavePath.lineTo(x1, y1)
-                wavePath.lineTo(x2, y1)
-                wavePath.lineTo(x2, y2)
-            }
-        }
+        buildRibbon(
+            tertiaryRibbonPath,
+            primaryPoints,
+            tertiaryPoints,
+            steps
+        )
 
         val color = when (outcome) {
             Outcome.SUCCESS -> 0xFF55E6A5.toInt()
@@ -255,12 +379,40 @@ class WaveformView @JvmOverloads constructor(
             }
         }
 
-        wavePaint.shader = null
+        // Subtle hue shifts keep the layers related without making them identical.
+        val secondaryBaseColor = shiftHue(color, 12f)
+        val tertiaryBaseColor = shiftHue(color, -12f)
+
+        val secondaryColor =
+            (secondaryBaseColor and 0x00FFFFFF) or 0xAA000000.toInt()
+        val tertiaryColor =
+            (tertiaryBaseColor and 0x00FFFFFF) or 0x66000000
+
+        // Paint the two ribbons separately so each follows its own outer trace.
+        ribbonPaint.color =
+            (secondaryBaseColor and 0x00FFFFFF) or 0x38000000
+        canvas.drawPath(secondaryRibbonPath, ribbonPaint)
+
+        ribbonPaint.color =
+            (tertiaryBaseColor and 0x00FFFFFF) or 0x30000000
+        canvas.drawPath(tertiaryRibbonPath, ribbonPaint)
+
+        // Broad bloom beneath the traces.
+        bloomPaint.color = (color and 0x00FFFFFF) or 0x26000000
+        canvas.drawPath(wavePath, bloomPaint)
+        canvas.drawPath(secondaryPath, bloomPaint)
+        canvas.drawPath(tertiaryPath, bloomPaint)
+
+        // Tighter glow around the primary trace.
+        glowPaint.color = (color and 0x00FFFFFF) or 0x66000000
+        canvas.drawPath(wavePath, glowPaint)
+
+        tertiaryPaint.color = tertiaryColor
+        secondaryPaint.color = secondaryColor
         wavePaint.color = color
 
-        glowPaint.color = (color and 0x00FFFFFF) or 0x66000000
-
-        canvas.drawPath(wavePath, glowPaint)
+        canvas.drawPath(tertiaryPath, tertiaryPaint)
+        canvas.drawPath(secondaryPath, secondaryPaint)
         canvas.drawPath(wavePath, wavePaint)
 
         if (isShown) {
