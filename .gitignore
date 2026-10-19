@@ -14,3 +14,7 @@
 .cxx
 local.properties
 /design
+
+# Android release build artifacts
+**/build/
+/app/release/
