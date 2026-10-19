@@ -1,4 +1,3 @@
-
 package co.neonexus.geminein
 
 import android.content.Intent
@@ -15,6 +14,7 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var statusText: TextView
     private lateinit var listenButton: Button
+    private lateinit var waveformView: WaveformView
 
     private var speechInput: SpeechInput? = null
     private var speechOutput: SpeechOutput? = null
@@ -56,16 +56,28 @@ class MainActivity : AppCompatActivity() {
 
         statusText = findViewById(R.id.statusText)
         listenButton = findViewById(R.id.listenButton)
+        waveformView = findViewById(R.id.waveformView)
+
+        waveformView.setListening(false)
 
         microphonePermissionHandler = MicrophonePermissionHandler(
             activity = this,
             startListening = { startListening() },
-            updateStatus = { message ->
-                statusText.text = message
-            }
         )
 
-        speechOutput = SpeechOutput(this) { utteranceId ->
+        speechOutput = SpeechOutput(
+            context = this,
+            onSpeakingChanged = { isSpeaking ->
+                runOnUiThread {
+                    if (isSpeaking) {
+                        waveformView.setState(WaveformView.State.SPEAKING)
+                    } else {
+                        waveformView.clearCommandOutcome()
+                        waveformView.setState(WaveformView.State.IDLE)
+                    }
+                }
+            }
+        ) { utteranceId ->
             runOnUiThread {
                 assistantSessionManager.handleSpeechOutputFinished(
                     utteranceId = utteranceId,
@@ -96,19 +108,36 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     recognizedSpeechHandler.handle(spokenText)
                 }
+            },
+            onAudioLevelChanged = { level ->
+                runOnUiThread {
+                    waveformView.setAudioLevel(level)
+                }
+            },
+            onSpeechStarted = {
+                runOnUiThread {
+                    waveformView.onSpeechStarted()
+                }
             }
         )
 
         commandHandler = CommandHandler(
             context = this,
-            updateStatus = { message ->
-                statusText.text = message
-            },
+            updateStatus = { message -> statusText.text = message },
             speak = { message, continueListening ->
                 speechController.speak(message, continueListening)
             },
             cancelAssistant = {
                 cancelAssistantInvocation()
+            },
+            onCommandOutcome = { succeeded ->
+                runOnUiThread {
+                    if (succeeded) {
+                        waveformView.showCommandSuccess()
+                    } else {
+                        waveformView.showCommandFailure()
+                    }
+                }
             }
         )
 
@@ -130,8 +159,7 @@ class MainActivity : AppCompatActivity() {
         ViewCompat.setOnApplyWindowInsetsListener(
             findViewById(R.id.main)
         ) { view, insets ->
-            val bars =
-                insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
 
             view.setPadding(
                 bars.left + 24,
@@ -154,6 +182,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+
     private fun startListening() {
         if (
             isFinishing ||
@@ -161,11 +190,15 @@ class MainActivity : AppCompatActivity() {
             assistantSessionManager.isCancellationRequested
         ) {
             Log.w(TAG, "Skipping listening: activity unavailable or cancelled")
+            waveformView.setListening(false)
             return
         }
 
+        waveformView.clearCommandOutcome()
+        waveformView.setListening(true)
         speechInput?.startListening()
     }
+
 
     private fun cancelAssistantInvocation() {
         if (assistantSessionManager.isCancellationRequested) {
@@ -181,6 +214,7 @@ class MainActivity : AppCompatActivity() {
 
         speechInput?.stopListening()
         speechOutput?.stop()
+        waveformView.setListening(false)
 
         assistantSessionManager.finishCancelledInvocation()
     }
@@ -204,6 +238,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         Log.i(TAG, "onDestroy: cleaning up speech input and output")
+
+        waveformView.setListening(false)
 
         speechInput?.destroy()
         speechInput = null

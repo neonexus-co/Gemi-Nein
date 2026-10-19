@@ -1,3 +1,6 @@
 <resources>
     <string name="app_name">Gemi-Nein</string>
+    <string name="audio_waveform">Audio waveform</string>
+    <string name="ready_when_you_are">Ready when you are.</string>
+    <string name="speak_to_gemi_nein">Speak to Gemi-nein</string>
 </resources>

@@ -15,7 +15,9 @@ class SpeechInput(
     private val context: Context,
     private val updateStatus: (String) -> Unit,
     private val setListeningUiEnabled: (Boolean) -> Unit,
-    private val onResult: (String) -> Unit
+    private val onResult: (String) -> Unit,
+    private val onAudioLevelChanged: (Float) -> Unit = {},
+    private val onSpeechStarted: () -> Unit = {}
 ) {
     companion object {
         private const val TAG = "GemiNeinVoice"
@@ -63,12 +65,12 @@ class SpeechInput(
 
         speechRecognizer?.setRecognitionListener(
             object : RecognitionListener {
-
                 override fun onReadyForSpeech(params: Bundle?) {
                     if (cancellationRequested) return
 
                     Log.i(TAG, "RecognitionListener: onReadyForSpeech")
                     updateStatus("Listening... Speak now.")
+                    onAudioLevelChanged(0f)
                 }
 
                 override fun onBeginningOfSpeech() {
@@ -76,10 +78,19 @@ class SpeechInput(
 
                     Log.i(TAG, "RecognitionListener: onBeginningOfSpeech")
                     updateStatus("I hear you...")
+                    onSpeechStarted()
                 }
 
                 override fun onRmsChanged(rmsdB: Float) {
-                    // Reserved for future listening visualization.
+                    if (cancellationRequested) return
+
+                    // Convert the recognizer's approximate dB level into
+                    // a stable 0..1 visual intensity value.
+                    val normalizedLevel =
+                        ((rmsdB + 2f) / 12f).coerceIn(0f, 1f)
+
+                    Log.d(TAG, "Microphone RMS: $rmsdB dB, normalized: $normalizedLevel")
+                    onAudioLevelChanged(normalizedLevel)
                 }
 
                 override fun onBufferReceived(buffer: ByteArray?) {}
@@ -88,6 +99,7 @@ class SpeechInput(
                     if (cancellationRequested) return
 
                     Log.i(TAG, "RecognitionListener: onEndOfSpeech")
+                    onAudioLevelChanged(0f)
                     updateStatus("Processing speech...")
                 }
 
@@ -102,6 +114,8 @@ class SpeechInput(
                         "RecognitionListener: onError " +
                                 "code=$error name=${recognitionErrorName(error)}"
                     )
+
+                    onAudioLevelChanged(0f)
 
                     updateStatus(
                         when (error) {
@@ -128,6 +142,8 @@ class SpeechInput(
                         Log.d(TAG, "Ignoring recognition results after cancellation")
                         return
                     }
+
+                    onAudioLevelChanged(0f)
 
                     val matches = results?.getStringArrayList(
                         SpeechRecognizer.RESULTS_RECOGNITION
@@ -171,8 +187,7 @@ class SpeechInput(
                 override fun onEvent(eventType: Int, params: Bundle?) {
                     Log.d(
                         TAG,
-                        "RecognitionListener: onEvent; " +
-                                "eventType=$eventType"
+                        "RecognitionListener: onEvent; eventType=$eventType"
                     )
                 }
             }
@@ -206,6 +221,7 @@ class SpeechInput(
             Log.i(TAG, "SpeechRecognizer.startListening() returned")
         } catch (e: Exception) {
             Log.e(TAG, "Exception thrown by startListening()", e)
+            onAudioLevelChanged(0f)
             updateStatus("Couldn't start listening: ${e.message}")
             setListeningUiEnabled(true)
         }
@@ -214,6 +230,7 @@ class SpeechInput(
     fun stopListening() {
         Log.i(TAG, "Cancelling speech recognition")
         cancellationRequested = true
+        onAudioLevelChanged(0f)
 
         try {
             speechRecognizer?.cancel()
@@ -227,6 +244,7 @@ class SpeechInput(
     fun destroy() {
         Log.i(TAG, "Destroying SpeechRecognizer")
         cancellationRequested = true
+        onAudioLevelChanged(0f)
         speechRecognizer?.destroy()
         speechRecognizer = null
     }

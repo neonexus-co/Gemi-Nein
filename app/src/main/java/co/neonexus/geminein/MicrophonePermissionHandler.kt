@@ -10,8 +10,7 @@ import androidx.core.content.ContextCompat
 
 class MicrophonePermissionHandler(
     private val activity: Activity,
-    private val startListening: () -> Unit,
-    private val updateStatus: (String) -> Unit
+    private val startListening: () -> Unit
 ) {
     companion object {
         private const val TAG = "GemiNeinVoice"
@@ -41,27 +40,5 @@ class MicrophonePermissionHandler(
                 MICROPHONE_REQUEST
             )
         }
-    }
-
-    fun handlePermissionResult(
-        requestCode: Int,
-        grantResults: IntArray
-    ): Boolean {
-        if (requestCode != MICROPHONE_REQUEST) {
-            return false
-        }
-
-        if (
-            grantResults.isNotEmpty() &&
-            grantResults[0] == PackageManager.PERMISSION_GRANTED
-        ) {
-            Log.i(TAG, "Microphone permission granted")
-            startListening()
-        } else {
-            Log.w(TAG, "Microphone permission denied")
-            updateStatus("Microphone permission is required.")
-        }
-
-        return true
     }
 }

@@ -10,7 +10,8 @@ class CommandHandler(
     private val context: Context,
     private val updateStatus: (String) -> Unit,
     private val speak: (String, Boolean) -> Unit,
-    private val cancelAssistant: () -> Unit
+    private val cancelAssistant: () -> Unit,
+    private val onCommandOutcome: (Boolean) -> Unit = {}
 ) {
     companion object {
         private const val TAG = "GemiNeinVoice"
@@ -68,6 +69,7 @@ class CommandHandler(
 
         try {
             ClockActions.setTimer(context, command.seconds)
+            onCommandOutcome(true)
 
             val minutes = command.seconds / 60
             val seconds = command.seconds % 60
@@ -91,6 +93,7 @@ class CommandHandler(
             speak(confirmation, false)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set timer", e)
+            onCommandOutcome(false)
             updateStatus(e.message ?: "Couldn't set the timer.")
         }
     }
@@ -104,6 +107,7 @@ class CommandHandler(
                 command.hour,
                 command.minute
             )
+            onCommandOutcome(true)
 
             val confirmation =
                 "Alarm set for ${formatTime(command.hour, command.minute)}."
@@ -112,6 +116,7 @@ class CommandHandler(
             speak(confirmation, false)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set alarm", e)
+            onCommandOutcome(false)
             updateStatus(e.message ?: "Couldn't set the alarm.")
         }
     }
@@ -128,6 +133,7 @@ class CommandHandler(
                 command.minute,
                 command.days
             )
+            onCommandOutcome(true)
 
             val dayNames = command.days
                 .sorted()
@@ -141,6 +147,7 @@ class CommandHandler(
             speak(confirmation, false)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set recurring alarm", e)
+            onCommandOutcome(false)
             updateStatus(e.message ?: "Couldn't set the recurring alarm.")
         }
     }
@@ -152,7 +159,13 @@ class CommandHandler(
         }
 
         val period = if (hour < 12) "AM" else "PM"
-        return String.format(Locale.ROOT, "%d:%02d %s", hour12, minute, period)
+        return String.format(
+            Locale.ROOT,
+            "%d:%02d %s",
+            hour12,
+            minute,
+            period
+        )
     }
 
     private fun dayName(day: Int): String {
@@ -170,6 +183,7 @@ class CommandHandler(
 
     private fun handleUnknown(spokenText: String) {
         Log.i(TAG, "Handling Unknown command")
+        onCommandOutcome(false)
 
         updateStatus("I heard: \"$spokenText\"\n")
 

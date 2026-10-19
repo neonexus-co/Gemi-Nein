@@ -1,4 +1,3 @@
-
 package co.neonexus.geminein
 
 import android.content.Context
@@ -9,6 +8,7 @@ import java.util.Locale
 
 class SpeechOutput(
     context: Context,
+    private val onSpeakingChanged: (Boolean) -> Unit = {},
     private val onUtteranceFinished: (String?) -> Unit
 ) {
     companion object {
@@ -42,12 +42,12 @@ class SpeechOutput(
 
                 textToSpeech?.setOnUtteranceProgressListener(
                     object : UtteranceProgressListener() {
-
                         override fun onStart(utteranceId: String?) {
                             Log.i(
                                 TAG,
                                 "TTS onStart: utteranceId=$utteranceId"
                             )
+                            onSpeakingChanged(true)
                         }
 
                         override fun onDone(utteranceId: String?) {
@@ -55,6 +55,7 @@ class SpeechOutput(
                                 TAG,
                                 "TTS onDone: utteranceId=$utteranceId"
                             )
+                            onSpeakingChanged(false)
                             onUtteranceFinished(utteranceId)
                         }
 
@@ -64,6 +65,7 @@ class SpeechOutput(
                                 TAG,
                                 "TTS onError: utteranceId=$utteranceId"
                             )
+                            onSpeakingChanged(false)
                             onUtteranceFinished(utteranceId)
                         }
 
@@ -76,6 +78,7 @@ class SpeechOutput(
                                 "TTS onError: utteranceId=$utteranceId, " +
                                         "errorCode=$errorCode"
                             )
+                            onSpeakingChanged(false)
                             onUtteranceFinished(utteranceId)
                         }
                     }
@@ -97,6 +100,7 @@ class SpeechOutput(
 
     fun stop() {
         textToSpeech?.stop()
+        onSpeakingChanged(false)
     }
 
     fun shutdown() {
@@ -104,5 +108,6 @@ class SpeechOutput(
         textToSpeech?.shutdown()
         textToSpeech = null
         isReady = false
+        onSpeakingChanged(false)
     }
 }
