@@ -1,3 +1,4 @@
+
 package co.neonexus.geminein
 
 import android.content.Context
@@ -309,8 +310,14 @@ class WaveformView @JvmOverloads constructor(
 
         if (width == 0 || height == 0) return
 
+        // Use a centered 16:9 drawing region inside the full-screen view.
+        // In portrait, the region becomes narrower and shorter.
+        // In landscape, it can occupy the full view.
+        val drawingWidth = width.toFloat()
+        val drawingHeight = drawingWidth * (9f / 16f)
         val centerX = width / 2f
         val centerY = height / 2f
+
         val now = AnimationUtils.currentAnimationTimeMillis()
 
         val deltaSeconds = if (lastFrameTime == 0L) {
@@ -355,8 +362,9 @@ class WaveformView @JvmOverloads constructor(
             State.IDLE -> 0f
         }
 
-        val amplitude = height * (idleAmplitude + levelContribution)
-        val halfWidth = width * 0.46f
+        // Scale amplitude from the 16:9 region, not the full portrait height.
+        val amplitude = drawingHeight * (idleAmplitude + levelContribution)
+        val halfWidth = drawingWidth / 2f
         val steps = 240
         val squareCycles = 4f
 
@@ -430,12 +438,12 @@ class WaveformView @JvmOverloads constructor(
             val secondarySineY = centerY +
                     secondarySine * amplitude * 0.8f * envelope *
                     smoothSineInversion(progress, 13) -
-                    height * 0.025f
+                    drawingHeight * 0.025f
 
             val tertiarySineY = centerY +
                     tertiarySine * amplitude * 0.6f * envelope *
                     smoothSineInversion(progress, 41) +
-                    height * 0.025f
+                    drawingHeight * 0.025f
 
             // Square mode: retain the established independent shapes and inversions.
             val secondarySquare = independentWave(
@@ -459,12 +467,12 @@ class WaveformView @JvmOverloads constructor(
             val secondarySquareY = centerY +
                     secondarySquare * secondarySquareAmplitude * envelope *
                     inversion(progress, phase, 13) -
-                    height * 0.025f
+                    drawingHeight * 0.025f
 
             val tertiarySquareY = centerY +
                     tertiarySquare * tertiarySquareAmplitude * envelope *
                     inversion(progress, phase + 1.7f, 41) +
-                    height * 0.025f
+                    drawingHeight * 0.025f
 
             // Smoothly transition between sine and square personalities.
             val secondaryY = secondarySineY * (1f - shapeBlend) +
@@ -527,12 +535,12 @@ class WaveformView @JvmOverloads constructor(
         val tertiaryColor =
             (tertiaryBaseColor and 0x00FFFFFF) or 0x66000000
 
-// First ribbon: 80% opacity
+        // First ribbon: 40% opacity.
         ribbonPaint.color =
-            (secondaryBaseColor and 0x00FFFFFF) or 0x66000000.toInt()
+            (secondaryBaseColor and 0x00FFFFFF) or 0x66000000
         canvas.drawPath(secondaryRibbonPath, ribbonPaint)
 
-// Second ribbon: 35% opacity
+        // Second ribbon: 15% opacity.
         ribbonPaint.color =
             (tertiaryBaseColor and 0x00FFFFFF) or 0x26000000
         canvas.drawPath(tertiaryRibbonPath, ribbonPaint)

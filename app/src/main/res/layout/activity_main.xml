@@ -5,19 +5,18 @@
     android:layout_height="match_parent"
     android:background="@drawable/gemi_background">
 
+    <co.neonexus.geminein.WaveformView
+        android:id="@+id/waveformView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@string/audio_waveform" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:gravity="center"
         android:orientation="vertical"
-        android:paddingHorizontal="24dp"
         android:paddingVertical="16dp">
-
-        <co.neonexus.geminein.WaveformView
-            android:id="@+id/waveformView"
-            android:layout_width="match_parent"
-            android:layout_height="150dp"
-            android:contentDescription="@string/audio_waveform" />
 
         <TextView
             android:id="@+id/statusText"
