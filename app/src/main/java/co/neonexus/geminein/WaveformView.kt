@@ -1,4 +1,3 @@
-
 package co.neonexus.geminein
 
 import android.content.Context
@@ -91,6 +90,15 @@ class WaveformView @JvmOverloads constructor(
 
     fun setAudioLevel(level: Float) {
         targetAudioLevel = level.coerceIn(0f, 1f)
+
+        if (
+            state == State.LISTENING &&
+            targetAudioLevel > 0.15f &&
+            smoothedAudioLevel < 0.12f
+        ) {
+            smoothedAudioLevel = 0.08f
+        }
+
         postInvalidateOnAnimation()
     }
 
@@ -313,7 +321,7 @@ class WaveformView @JvmOverloads constructor(
 
         lastFrameTime = now
 
-        val smoothing = if (targetAudioLevel > smoothedAudioLevel) 10f else 4f
+        val smoothing = if (targetAudioLevel > smoothedAudioLevel) 18f else 8f
         val audioBlend = 1f - exp(-smoothing * deltaSeconds)
 
         smoothedAudioLevel +=
