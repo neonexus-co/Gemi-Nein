@@ -1,4 +1,3 @@
-
 package co.neonexus.geminein
 
 import android.util.Log
@@ -153,9 +152,23 @@ object AssistantCommandParser {
             """(?:set|create)\s+(?:an?\s+)?alarm\s+(?:for\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?"""
         ).matchEntire(commandText)
 
+        Log.d(
+            "GemiNeinParser",
+            "Absolute alarm match: ${absoluteAlarmMatch?.value}"
+        )
+
         if (absoluteAlarmMatch != null) {
-            val time = parseClockTime(absoluteAlarmMatch.value)
-                ?: return AssistantCommand.Unknown(text)
+            val time = parseClockTime(
+                absoluteAlarmMatch.groupValues[1] +
+                        (absoluteAlarmMatch.groupValues[2].takeIf { it.isNotEmpty() }?.let { ":$it" } ?: "") +
+                        (absoluteAlarmMatch.groupValues[3].takeIf { it.isNotEmpty() }?.let { " $it" } ?: "")
+            )
+
+            Log.d("GemiNeinParser", "Parsed clock time: $time")
+
+            if (time == null) {
+                return AssistantCommand.Unknown(text)
+            }
 
             return AssistantCommand.SetAlarm(time.first, time.second)
         }
